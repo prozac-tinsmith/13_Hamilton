@@ -1,6 +1,7 @@
 # Script R - Hamilton
 
-Pac <- c('ggplot2',"data.table")
+## Packages utilisés enlever le # devant la deucième ligne si vous vouler installer les packages
+Pac <- c("ggplot2","data.table", "psy")
 #for (i in Pac) { install.packages(i, character.only = TRUE)}
 for (i in Pac) {  library(i, character.only = TRUE)}
 
@@ -10,12 +11,15 @@ scl <- read.csv2("autoeval.csv", sep=" ")
 ham <- read.csv2("hdrs.csv", sep=" ")
 
 
-# Data management  
+########## Data management  
+
+###### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les ancienne colonnes
 ham$HAMD16 <- ifelse(is.na(ham$HAMD16B)==T,ham$HAMD16A,ham$HAMD16B)
 ham <- subset(ham, select = -c(HAMD16B, HAMD16A))
 
 
-ham_large <- NULL
+###### Constitution d'un dataframe globale au format large (db_large)
+######## J'utilise dcast() de data.table parcque je trouvait reshape2 trop compliqué
 ham_large <- dcast(as.data.table(ham), NUMERO ~ VISIT, value.var = c(paste0("HAMD", (1:16))), verbose=T)
 db_large <- merge(gp, as.data.frame(ham_large), by="NUMERO", all.x = T, all.y = T)
 View(ham_large)
