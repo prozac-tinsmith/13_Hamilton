@@ -1,7 +1,7 @@
 # Script R - Hamilton
 
 ## Packages utilisés enlever le # devant la deucième ligne si vous vouler installer les packages
-Pac <- c("ggplot2","data.table", "psy")
+Pac <- c("ggplot2","data.table", "psy", "gridExtra")
 #for (i in Pac) { install.packages(i, character.only = TRUE)}
 for (i in Pac) {  library(i, character.only = TRUE)}
 
@@ -13,23 +13,41 @@ ham <- read.csv2("hdrs.csv", sep=" ")
 
 ########## Data management  
 
+
+
 ###### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les ancienne colonnes
 ham$HAMD16 <- ifelse(is.na(ham$HAMD16B)==T,ham$HAMD16A,ham$HAMD16B)
 ham <- subset(ham, select = -c(HAMD16B, HAMD16A))
 
+###### Score globale de Hamilton par colonnes
+ham$HS <- rowSums(subset(ham, select = HAMD1:HAMD16), na.rm = TRUE)
 
 ###### Constitution d'un dataframe globale au format large (db_large)
 ######## J'utilise dcast() de data.table parcque je trouvait reshape2 trop compliqué
-ham_large <- dcast(as.data.table(ham), NUMERO ~ VISIT, value.var = c(paste0("HAMD", (1:16))), verbose=T)
+ham_large <- dcast(as.data.table(ham), NUMERO ~ VISIT, value.var = c(paste0("HAMD", (1:16)), "HS"), verbose=TRUE)
 db_large <- merge(gp, as.data.frame(ham_large), by="NUMERO", all.x = T, all.y = T)
 View(ham_large)
 scl_large <- dcast(as.data.table(scl), NUMERO~VISIT, value.var = c(paste0("Q",1:90)), verbose = T, fill = NA)
 View(scl_large)
 db_large <- merge(as.data.frame(scl_large), db_large, by="NUMERO", all.x = T, all.y = T) ## Format Large SCL, HAM
 View(db_large)
+ham <- merge(gp, as.data.frame(ham), by="NUMERO", all.x = T, all.y = T)
+
 
 
 scl_j0 <- subset(scl, VISIT=="J0")
+
+col_scl_J0 <- NULL
+for (i in 1:90) {
+  
+  col_scl_J0 <- paste0("Q",i,"_J0")
+  tab <- table(db_large[[col_scl_J0]], deparse.level = 2) 
+  print(i)
+  print(tab)
+}
+
+
+
 
 
 ###### Description des données 
@@ -45,10 +63,40 @@ round(100*(length(which(scl_j0==4))/(nrow(scl_j0)*ncol(scl_j0))),1) ## % répons
 
 
 
+#### Question 1 : validation du score SCL90 à J0 & J90
+
+################ Histogrammes des réponses aux questions à J0 du score de Hamilton
+plist <- list()
+
+for (i in 1:16) {
+  col_ham_J0_i <- paste0("HAMD",i,"_J0")
+  plist[[i]] <- ggplot(data=db_large, aes(x=.data[[col_ham_J0_i]]))+
+    geom_bar( binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+    theme_classic()+
+    theme(plot.title = element_text(size=15)  )+
+    scale_x_continuous(limits = c(0, 4))
+}
+grid.arrange(grobs=plist, ncol=4, nrow=4)
+
+plist2 <- list()
+for (i in 1:16) {
+  col_ham_J56 <- paste0("HAMD",i,"_J56")
+  plist2[[i]] <- ggplot(data=db_large, aes(x=.data[[col_ham_J56]]))+
+    geom_bar( binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
+    theme_classic()+
+    theme(plot.title = element_text(size=15)  )+
+    scale_x_continuous(limits = c(0, 4))
+}
+grid.arrange(grobs=plist2, ncol=4, nrow=4)
+
+
+
 
 
 #########  Répartition de la moyenne du score de HAMD au cours du temps ##################################
 # Moyenne de HS par VISIT
+ham$J.VISIT <- as.numeric(sub("J", "", ham$VISIT))
+
 d1 <- aggregate(ham$HS, by=list(ham$VISIT), FUN=mean)
 names(d1) <- c("Date", "Mean")
 
