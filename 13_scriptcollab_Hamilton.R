@@ -1,142 +1,274 @@
 # Script R - Hamilton
 
 ## Packages utilisés enlever le # devant la deucième ligne si vous vouler installer les packages
-Pac <- c("ggplot2","data.table", "psy", "gridExtra")
+Pac <- c("ggplot2","data.table", "psy", "gridExtra", "lme4")
 #for (i in Pac) { install.packages(i, character.only = TRUE)}
-for (i in Pac) {  library(i, character.only = TRUE)}
 
+# Définir le répertoire de travail
 setwd("/home/wasabee/R/0_Data_bases/D2")
+
+# Charger les fichiers CSV
 gp <- read.csv2("H_groupe.csv", sep=" ")
 scl <- read.csv2("autoeval.csv", sep=" ")
 ham <- read.csv2("hdrs.csv", sep=" ")
 
-
 ########## Data management  
 
+###### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les anciennes colonnes
+
+ham$HAMD16 <- ifelse(is.na(ham$HAMD16B), ham$HAMD16A, ham$HAMD16B)
+ham <- subset(ham, select = -c(HAMD16B, HAMD16A)) # Supprimer les colonnes HAMD16A et HAMD16B après la fusion
+ham$HS <- rowSums(subset(ham, select = HAMD1:HAMD16), na.rm = TRUE)# Calculer le score global de Hamilton
+
+###### Calculer le sous-score dépression de SCL90
+col_scl_D <- paste0("Q", c(5, 14, 15, 20, 22, 26, 29, 30, 31, 32, 54, 71, 79))
+scl[col_scl_D] <- lapply(scl[col_scl_D], function(x) as.numeric(as.character(x)))
+
+col_scl_Som <- paste0("Q", c(1,4,12,27,42,48,49,52,53,56,58,40))
+scl[col_scl_Som] <- lapply(scl[col_scl_Som], function(x) as.numeric(as.character(x)))
+
+col_scl_Obs <- paste0("Q", c(9,10,28,38,3,45,46,51,55,65))
+scl[col_scl_Obs] <- lapply(scl[col_scl_Obs], function(x) as.numeric(as.character(x)))
+
+col_scl_Hos <- paste0("Q", c(11,24,63,67,74,81))
+scl[col_scl_Hos] <- lapply(scl[col_scl_Hos], function(x) as.numeric(as.character(x)))
+
+col_scl_Phob <- paste0("Q", c(13,25,47,70,75,82,50))
+scl[col_scl_Phob] <- lapply(scl[col_scl_Phob], function(x) as.numeric(as.character(x)))
+
+col_scl_Para <- paste0("Q", c(8,18,43,68,76,83))
+scl[col_scl_Para] <- lapply(scl[col_scl_Para], function(x) as.numeric(as.character(x)))
+
+col_scl_Psycho <- paste0("Q", c(7,16,35,62,77,84,85,87,90,88))
+scl[col_scl_Psycho] <- lapply(scl[col_scl_Psycho], function(x) as.numeric(as.character(x)))
+
+col_scl_Div <- paste0("Q", c(19,44,59,60,64,66,89))
+scl[col_scl_Div] <- lapply(scl[col_scl_Div], function(x) as.numeric(as.character(x)))
+
+# Calculer le sous-score dépression
+scl$HS_D <- rowSums(scl[, col_scl_D], na.rm = TRUE)
+scl$HS_Som <- rowSums(scl[col_scl_Som], na.rm = TRUE)
+scl$HS_Obs <- rowSums(scl[col_scl_Obs], na.rm = TRUE)
+scl$HS_Hos <- rowSums(scl[, col_scl_Hos], na.rm = TRUE)
+scl$HS_Phob <- rowSums(scl[, col_scl_Phob], na.rm = TRUE)
+scl$HS_Para <- rowSums(scl[, col_scl_Para], na.rm = TRUE)
+scl$HS_Psyc <- rowSums(scl[, col_scl_Psycho], na.rm = TRUE)
+scl$HS_Div <- rowSums(scl[, col_scl_Div], na.rm = TRUE)
+
+###### Constitution d'un dataframe global au format large (db_large)
+
+library(data.table) # Charger la bibliothèque data.table pour utiliser la fonction dcast
 
 
-###### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les ancienne colonnes
-ham$HAMD16 <- ifelse(is.na(ham$HAMD16B)==T,ham$HAMD16A,ham$HAMD16B)
-ham <- subset(ham, select = -c(HAMD16B, HAMD16A))
+ham <- merge(gp, as.data.frame(ham), by="NUMERO", all.x = T, all.y = T) # Fusionner les données `ham` et `gp` pour obtenir un dataframe complet
+ham_large <- dcast(as.data.table(ham), NUMERO ~ VISIT, value.var = c(paste0("HAMD", (1:16)), "HS")) # Transformer les données `ham` en format large avec `dcast`
 
-###### Score globale de Hamilton par colonnes
-ham$HS <- rowSums(subset(ham, select = HAMD1:HAMD16), na.rm = TRUE)
+db_large <- merge(gp, as.data.frame(ham_large), by="NUMERO", all.x = T, all.y = T) # Fusionner les données du groupe `gp` avec les données `ham_large`
+scl_large <- dcast(as.data.table(scl), NUMERO ~ VISIT, value.var = c(paste0("Q", 1:90), "HS_D", "HS_Som", "HS_Obs", "HS_Hos", "HS_Phob", "HS_Para", "HS_Psyc", "HS_Div"), fill = NA) # Transformer les données `scl` en format large avec `dcast`
+db_large <- merge(as.data.frame(scl_large), db_large, by="NUMERO", all.x = T, all.y = T) # Fusionner `scl_large` et `db_large` pour obtenir un dataframe complet
 
-###### Constitution d'un dataframe globale au format large (db_large)
-######## J'utilise dcast() de data.table parcque je trouvait reshape2 trop compliqué
-ham_large <- dcast(as.data.table(ham), NUMERO ~ VISIT, value.var = c(paste0("HAMD", (1:16)), "HS"), verbose=TRUE)
-db_large <- merge(gp, as.data.frame(ham_large), by="NUMERO", all.x = T, all.y = T)
-View(ham_large)
-scl_large <- dcast(as.data.table(scl), NUMERO~VISIT, value.var = c(paste0("Q",1:90)), verbose = T, fill = NA)
-View(scl_large)
-db_large <- merge(as.data.frame(scl_large), db_large, by="NUMERO", all.x = T, all.y = T) ## Format Large SCL, HAM
-View(db_large)
-ham <- merge(gp, as.data.frame(ham), by="NUMERO", all.x = T, all.y = T)
+sum(is.na(ham))
+sum(is.na(db_large))
+sum(is.na(ham_large))
+sum(is.na(scl_large))
+sum(is.na(scl))
 
+sum(is.na(ham_large)) / (nrow(ham_large) * ncol(ham_large)) * 100
+sum(is.na(db_large)) / (nrow(db_large) * ncol(db_large)) * 100
 
-
-scl_j0 <- subset(scl, VISIT=="J0")
-
-col_scl_J0 <- NULL
-for (i in 1:90) {
-  
-  col_scl_J0 <- paste0("Q",i,"_J0")
-  tab <- table(db_large[[col_scl_J0]], deparse.level = 2) 
-  print(i)
-  print(tab)
-}
-
-
-
+sum(is.na(db_large[col_ham_J0])) / (nrow(db_large[col_ham_J0]) * ncol(db_large[col_ham_J0])) * 100
+sum(is.na(db_large[col_ham_J56])) / (nrow(db_large[col_ham_J56]) * ncol(db_large[col_ham_J56])) * 100
 
 
 ###### Description des données 
 
 ######### scl-Questionnaire
+
+# Boucle pour afficher les distributions des réponses pour chaque question (Q1 à Q90)
+
+
+for (i in 1:90) {
+  col_scl_J0 <- paste0("Q", i, "_J0")
+  tab <- table(db_large[[col_scl_J0]], deparse.level = 2) 
+  print(i)
+  print(tab)
+}
+# Calculer le nombre de valeurs manquantes dans le dataframe `scl`
 sum(is.na(scl))
-round(100*(sum(is.na(scl))/(nrow(scl)*ncol(scl))),2) # % de données manquantes
 
+round(100 * (sum(is.na(scl)) / (nrow(scl) * ncol(scl))), 2) # % de données manquantes
 table(scl$Q1)
+round(100 * (length(which(scl_j0 == 0)) / (nrow(scl_j0) * ncol(scl_j0))), 1) ## % réponse 0 J0
+round(100 * (length(which(scl_j0 == 4)) / (nrow(scl_j0) * ncol(scl_j0))), 1) ## % réponse 4 J0
 
-round(100*(length(which(scl_j0==0))/(nrow(scl_j0)*ncol(scl_j0))),1) ## % réponse 0 J0
-round(100*(length(which(scl_j0==4))/(nrow(scl_j0)*ncol(scl_j0))),1) ## % réponse 4 J0
+#### Données manquantes
+# Trouver les indices des valeurs manquantes pour les colonnes HAMD1 à HAMD16 pour la visite J0
+which(is.na(db_large[paste0("HAMD", 1:16, "_J0")]))
+db_large[1, paste0("HAMD", 1:16, "_J0")] # Afficher les données manquantes pour la première observation
+
+
+################################################  Question 1 : validation du score HDRS
+
+################ Histogrammes des réponses aux questions à J0 & J58 du score de Hamilton
+
+# Créer les noms des colonnes pour les scores à J0 et J56
+col_ham_J0 <- paste0("HAMD", 1:16, "_J0")
+col_ham_J56 <- paste0("HAMD", 1:16, "_J56")
 
 
 
-#### Question 1 : validation du score SCL90 à J0 & J90
 
-################ Histogrammes des réponses aux questions à J0 du score de Hamilton
-plist <- list()
+library(ggplot2)
+library(gridExtra)
 
-for (i in 1:16) {
-  col_ham_J0_i <- paste0("HAMD",i,"_J0")
-  plist[[i]] <- ggplot(data=db_large, aes(x=.data[[col_ham_J0_i]]))+
-    geom_bar( binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
-    theme_classic()+
-    theme(plot.title = element_text(size=15)  )+
-    scale_x_continuous(limits = c(0, 4))
+# Créer une liste de graphiques pour chaque item HAMD à J0
+
+
+fhist_item <- function(i, j) {
+  col_ham <- paste0("HAMD", i, "_", j)
+  ggplot(data = db_large, aes(x = factor(.data[[col_ham]], levels = c(0, 1, 2, 3, 4, NA)))) +
+    geom_bar(fill = ifelse(j == "J0", "#69b3a2", "#ffb347"), color = "#e9ecef", alpha = 0.9) +
+    ggtitle(paste("Item", i, "à", j)) +
+    theme_classic() +
+    theme(plot.title = element_text(size = 15)) +
+    scale_x_discrete(drop = FALSE)
 }
-grid.arrange(grobs=plist, ncol=4, nrow=4)
 
-plist2 <- list()
-for (i in 1:16) {
-  col_ham_J56 <- paste0("HAMD",i,"_J56")
-  plist2[[i]] <- ggplot(data=db_large, aes(x=.data[[col_ham_J56]]))+
-    geom_bar( binwidth=1, fill="#69b3a2", color="#e9ecef", alpha=0.9) +
-    theme_classic()+
-    theme(plot.title = element_text(size=15)  )+
-    scale_x_continuous(limits = c(0, 4))
+plist_J0 <- lapply(1:16, function(i) fhist_item(i, "J0"))
+plist_J56 <- lapply(1:16, function(i) fhist_item(i, "J56"))
+
+grid.arrange(grobs = plist_J0, ncol = 4, nrow =4)
+grid.arrange(grobs = plist_J56, ncol = 4, nrow =4)
+
+
+
+#### Diagramme des valeurs propres et analayse factorielle
+# Charger la bibliothèque psy pour les analyses psychométriques
+library(psy)
+
+# Afficher le diagramme des valeurs propres pour HDRS à J0 et les items spécifiques
+scree.plot(db_large[, col_ham_J0], simu = 20, title = "Diagramme des valeurs propres HDRS J0")
+#### Analyse factorielle à 3 facteurs avec rotation varimax à J0
+fact_j0 <-factanal(na.omit(db_large[,col_ham_J0]), factors = 4)
+print(fact_j0, cutoff=0)
+
+write.csv2(round(as.data.frame(unclass(fact_j0$loadings)), digits = 3), file = "/home/wasabee/M2/Devoirs/D2/loadings_j0f4.csv", row.names = TRUE)
+
+# Afficher le diagramme des valeurs propres pour HDRS à J56 et les items spécifiques
+scree.plot(db_large[, col_ham_J56], simu = 20, title = "Diagramme des valeurs propres HDRS J56")
+#### Analyse factorielle à 3 facteurs avec rotation varimax à J56
+fact_j56 <-factanal(na.omit(db_large[,col_ham_J56]), factors = 3)
+print(fact_j56, cutoff=0)
+
+write.csv2(round(as.data.frame(unclass(fact_j56$loadings)), digits = 3), file = "/home/wasabee/M2/Devoirs/D2/loadings_j56.csv", row.names = TRUE)
+plot(sort(as.numeric(fact_j0$loadings[,2])))
+
+
+
+
+
+###################### Sous-score spécifique dépression
+# Créer des vecteurs pour les scores spécifiques (questions sélectionnées) à J0 et J56
+col_af1_J0 <- paste0("HAMD", c(12,14,16), "_J0")
+scree.plot(db_large[, col_af1_J0], simu = 20, title = "Diagramme des valeurs propres HDRS J0, item spécifiques")
+col_af2_J0 <- paste0("HAMD", c(4,5,13,15), "_J0")
+scree.plot(db_large[, col_af2_J0], simu = 20, title = "Diagramme des valeurs propres HDRS J0, item spécifiques")
+col_af3_J0 <- paste0("HAMD", c(1,2,3,6,7,8,9,10), "_J0")
+scree.plot(db_large[, col_af3_J0], simu = 20, title = "Diagramme des valeurs propres HDRS J0, item spécifiques")
+
+col_af1_J56 <- paste0("HAMD", c(1,3,4,5,7,8,12, 16), "_J56")
+scree.plot(db_large[, col_af1_J56], simu = 20, title = "Diagramme des valeurs propres HDRS J56, factor1")
+
+col_af2_J56 <- paste0("HAMD", c(2,6,9,10,11,13,15), "_J56")
+scree.plot(db_large[, col_af2_J56], simu = 20, title = "Diagramme des valeurs propres HDRS J56, factor2")
+
+
+
+################ Cronbach alpha sous échelle items 1,3,4,7,8,10,12 
+
+cronbach(db_large[, col_af1_J56])
+cronbach(db_large[, col_af2_J56])
+
+
+
+###################### Validité concourante & divergente
+
+
+
+
+SS_SCL <- c("HS_D", "HS_Som", "HS_Obs", "HS_Hos", "HS_Phob", "HS_Para", "HS_Psyc", "HS_Div")
+
+# Initialiser les tableaux de corrélation pour J0 et J56
+correlations_J0 <- data.frame(Sous_Score = SS_SCL, Correlation = numeric(length(SS_SCL)))
+correlations_J56 <- data.frame(Sous_Score = SS_SCL, Correlation = numeric(length(SS_SCL)))
+
+# Calculer les corrélations pour J0
+for (i in SS_SCL) {
+  corr_value <- cor(db_large[, paste0(i, "_J0")], db_large$HS_J0, use = "complete.obs", method = "pearson")
+  correlations_J0[correlations_J0$Sous_Score == i, "Correlation"] <- round(corr_value, 3)
 }
-grid.arrange(grobs=plist2, ncol=4, nrow=4)
+
+# Calculer les corrélations pour J56
+for (i in SS_SCL) {
+  corr_value <- cor(db_large[, paste0(i, "_J56")], db_large$HS_J0, use = "complete.obs", method = "pearson")
+  correlations_J56[correlations_J56$Sous_Score == i, "Correlation"] <- round(corr_value, 3)
+}
 
 
+correlation_table <- merge(correlations_J0, correlations_J56, by = "Sous_Score", suffixes = c("_J0", "_J56"))
+colnames(correlation_table) <- c("Sous-Score", "Corrélation J0", "Corrélation J56")
+
+write.csv(correlation_table, "/home/wasabee/M2/Devoirs/D2/correlation_table.csv", row.names = FALSE)
 
 
+################################## Question 2 Model mixtes
 
-#########  Répartition de la moyenne du score de HAMD au cours du temps ##################################
-# Moyenne de HS par VISIT
+######### Répartition de la moyenne du score de HAMD au cours du temps ##################################
+# Extraire les jours de visite en tant que valeurs numériques
 ham$J.VISIT <- as.numeric(sub("J", "", ham$VISIT))
 
-d1 <- aggregate(ham$HS, by=list(ham$VISIT), FUN=mean)
+# Calculer la moyenne du score HAMD pour chaque visite
+d1 <- aggregate(ham$HS, by = list(ham$VISIT), FUN = mean)
 names(d1) <- c("Date", "Mean")
 
+# Définir l'ordre des dates de visite
 d1$Date <- factor(d1$Date, levels = paste0("J", c(0, 4, 7, 14, 21, 28, 42, 56)))
 
+# Calculer l'écart-type et le nombre d'observations pour chaque visite
+d2 <- aggregate(ham$HS, by = list(ham$VISIT), FUN = sd)
+d3 <- aggregate(ham$HS, by = list(ham$VISIT), FUN = length)
 
-d2 <- aggregate(ham$HS, by=list(ham$VISIT), FUN=sd)
-d3 <- aggregate(ham$HS, by=list(ham$VISIT), FUN=length)
-d1$sem <- d2$x/sqrt(d3$x)
+# Calculer l'erreur standard de la moyenne
+d1$sem <- d2$x / sqrt(d3$x)
 pd <- position_dodge(0.1)
 
-p <- ggplot(d1, aes(x=Date, y=Mean, group = 1))+
-  geom_errorbar(aes(ymin=Mean-sem, ymax=Mean+sem), colour="black", width=.2, position=pd)+
-  geom_line(position = pd)+
-  geom_point(position = pd, size=3, shape=21)+
-  theme_classic() 
-p 
+# Créer un graphique de la moyenne du score HAMD avec les barres d'erreur
+p <- ggplot(d1, aes(x = Date, y = Mean, group = 1)) +
+  geom_errorbar(aes(ymin = Mean - sem, ymax = Mean + sem), colour = "black", width = .2, position = pd) +
+  geom_line(position = pd) +
+  geom_point(position = pd, size = 3, shape = 21) +
+  theme_classic()
+p
 
+##### En fagot
+# Créer un graphique en ligne pour chaque sujet montrant l'évolution du score HAMD
+p <- ggplot(ham, aes(x = J.VISIT, y = HS, group = NUMERO)) +
+  geom_line(alpha = 0.4) +
+  theme_classic() + labs(y = "Score de dépression", x = "Durée de suivi en jours")
+p
 
-#####  En fagot
-p <- ggplot(ham, aes(x=J.VISIT, y=HS, group = NUMERO)) +
-  geom_line(alpha = 0.4) + 
-  theme_classic() + labs(y = "Score de dépression", x = "Durée de suivie en jours") 
-p 
-
-#####  Par groupes
-ggplot(ham, aes(x=J.VISIT, y=HS, group = NUMERO, colour = GROUPE>0))+
-  geom_smooth(aes(group = GROUPE>0, fill = GROUPE>0))+
-  guides(fill=F)+
-  theme_classic()+
-  scale_color_discrete(name="GROUPE", labels=c("0", "1"))
-
-
-
-
-
+##### Par groupes
+# Créer un graphique avec une courbe lissée pour chaque groupe
+# Les groupes sont définis par la variable `GROUPE` (binaire)
+ggplot(ham, aes(x = J.VISIT, y = HS, group = NUMERO, colour = GROUPE > 0)) +
+  geom_smooth(aes(group = GROUPE > 0, fill = GROUPE > 0)) +
+  guides(fill = F) +
+  theme_classic() +
+  scale_color_discrete(name = "GROUPE", labels = c("0", "1"))
 
 ## Analyse factorielle rotation varimax x facteurs
 
-
-
 #### BAZARD
+# Réorganiser les données pour que les dates soient triées par ordre croissant
 d1 <- d1[order(as.numeric(sub("J", "", d1$Date))), ]
+scl_j0 <- subset(scl, VISIT == "J0") # Sélectionner les observations de `scl` pour la visite J0
