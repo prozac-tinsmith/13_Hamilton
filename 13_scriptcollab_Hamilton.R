@@ -12,13 +12,42 @@ gp <- read.csv2("H_groupe.csv", sep=" ")
 scl <- read.csv2("autoeval.csv", sep=" ")
 ham <- read.csv2("hdrs.csv", sep=" ")
 
-########## Data management  
+# Data management ----  
 
-###### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les anciennes colonnes
+## Hamilton ----
+
+### Summary des items ----
+
+summary(ham[, names(ham)[grepl("HAM", names(ham))]]) # Les min et max des items semblent corrects
+
+### Fusionner les colonnes 16A & 16B du score de Hamilton puis supprimer les anciennes colonnes ----
 
 ham$HAMD16 <- ifelse(is.na(ham$HAMD16B), ham$HAMD16A, ham$HAMD16B)
 ham <- subset(ham, select = -c(HAMD16B, HAMD16A)) # Supprimer les colonnes HAMD16A et HAMD16B après la fusion
+
+
 ham$HS <- rowSums(subset(ham, select = HAMD1:HAMD16), na.rm = TRUE)# Calculer le score global de Hamilton
+
+
+## SCL90 ----
+
+### Summary des items ----
+
+summary(scl[, names(scl)[grepl("Q", names(scl))]]) # Les max des items ne semblent pas corrects ; erreurs de saisie ?
+lapply(scl[, names(scl)[grepl("Q", names(scl))]], unique)
+
+### Nettoyage des items ???? ----
+
+#### Remplacer les NDs par NA
+scl[grep("^Q", names(scl))] <- lapply(scl[grep("^Q", names(scl))], function(x) {
+  x[x == "ND" | x == ""] <- NA
+  x
+})
+
+#### Transformer les variables items en "numeric"
+scl[grep("^Q", names(scl))] <- lapply(scl[grep("^Q", names(scl))], as.numeric)
+
+# Fin ajout Martin 25/11/2024
 
 ###### Calculer le sous-score dépression de SCL90
 col_scl_D <- paste0("Q", c(5, 14, 15, 20, 22, 26, 29, 30, 31, 32, 54, 71, 79))
